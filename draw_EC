@@ -1,0 +1,347 @@
+; This work need convert ECMWF time to referenced UT date format
+
+;--UT-referenced date--
+;(0)     20170712
+;(1)     20170713
+;(2)     20170714
+;(3)     20170715
+;(4)     20170716
+;--Julian/Gregorian date--
+;(0)     1030224
+;(1)     1030248
+;(2)     1030272
+;(3)     1030296
+;(4)     1030320
+
+; ------------------------------------------ 
+    wrf_file=addfile("wrfinput_d01","r")
+      mapproj = "LambertConformal"
+      truelat1 = wrf_file@TRUELAT1
+      truelat2 = wrf_file@TRUELAT2
+      clon     = wrf_file@STAND_LON
+    dsizes = getfiledimsizes(wrf_file)
+    nx = dsizes(2)
+    ny = dsizes(3)
+    xlat=wrf_file->XLAT
+    xlon=wrf_file->XLONG
+    lat_ll  = xlat(0,0,0)
+    lat_ur  = xlat(0,ny-1,nx-1)
+    lon_ll  = xlon(0,0,0)
+    lon_ur  = xlon(0,ny-1,nx-1)
+undef("setmpres")
+function setmpres(title:string, str1:string, str2:string)
+begin
+   mpres                         = True
+   mpres@gsnPaperOrientation     = "portrait"
+   mpres@gsnMaximize             = False            ; Maximize plot in frame.
+   mpres@gsnDraw                 = False
+   mpres@gsnFrame                = False            ; Don't advance the frame
+   mpres@mpProjection            = "LambertConformal"          ; choose projection
+      mpres@mpLambertParallel1F     = truelat1      ; two parallels
+      mpres@mpLambertParallel2F     = truelat2
+      mpres@mpLambertMeridianF      = clon          ; central meridian
+   mpres@mpLimitMode             = "Corners"
+   mpres@mpLeftCornerLatF        = lat_ll
+   mpres@mpLeftCornerLonF        = lon_ll
+   mpres@mpRightCornerLatF       = lat_ur
+   mpres@mpRightCornerLonF       = lon_ur
+   mpres@pmTickMarkDisplayMode   = "Always"
+   ; mpres@tmYROn                  = False
+   ; mpres@tmXBOn                  = False
+   mpres@tmXTMajorLengthF        = 0
+   mpres@tmYLMajorLengthF        = 0
+   mpres@tmXBMajorLengthF        = 0
+   mpres@tmYRMajorLengthF        = 0
+   mpres@mpOutlineBoundarySets   = "GeophysicalAndUSStates" ; state boundaries
+   mpres@mpFillOn = False
+   ;mpres@mpFillOn = True
+   mpres@mpLandFillColor = "white"
+   mpres@tfDoNDCOverlay          = True
+   mpres@mpUSStateLineColor = "black"
+   mpres@mpNationalLineColor = "black"
+   mpres@mpGeophysicalLineColor  = "black"
+   mpres@mpGridAndLimbOn         = True
+   mpres@mpGridLineDashPattern   = 2
+   mpres@mpGridLineDashSegLenF   = 0.06            ; default 0.15
+   mpres@mpDataBaseVersion       = "MediumRes"
+
+   mpres@mpDataSetName          = "Earth..4"   ; This new database contains
+   mpres@mpOutlineOn            = True         ; Turn on map outlines
+   mpres@mpOutlineSpecifiers    = (/"China:states","Taiwan"/)       ;China:states
+
+   ; gsn resources:
+   mpres@gsnStringFontHeightF    = 0.015
+   mpres@gsnLeftString           = str1         ; add left string
+   mpres@gsnRightString          = str2         ; add right string
+   ; Title resources:
+   mpres@tiMainString            = title
+   mpres@tiMainOffsetYF          = 0.0             ; Move the title down.
+   mpres@tiMainFontHeightF       = 0.015
+   return(mpres)
+end
+; ------------------------------------------
+
+
+load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_code.ncl"
+load "$NCARG_ROOT/lib/ncarg/nclscripts/csm/gsn_csm.ncl"
+
+begin 
+
+  filename = "ec-201707.nc"
+
+  fin = addfile(filename, "r")
+  lon = fin->longitude  ; "degrees_east"
+  lat = fin->latitude   ; "degrees_north"
+  level     = fin->level      ; "pressure_level" "millibars"
+                              ; level = 300, 400, 500, 700, 850
+  time      = fin->time       ; "hours since 1900-01-01 00:00:0.0" 
+  itime     = 50
+; --------------------------- 
+;  UT         JG      Index
+;  2017071200 1030224 44
+;  2017071206 1030230 45
+;  2017071212 1030236 46
+;  2017071218 1030242 47 
+;  2017071300 1030248 48  ** 
+;  2017071306 1030254 49
+;  2017071312 1030260 50  **
+; --------------------------
+
+  z         = fin->z          ; "Geopotential" 
+    z_scale_factor = 1.38288265787847 
+    z_add_offset = 51172.4589492961
+  z_cal        = ( z * z_scale_factor) + z_add_offset
+    ; convert m**2 s**-2 to gpm 
+  z_cal_gpm = z_cal/9.80665
+
+  z_cal_gpm@units="mm"
+  z_cal_gpm!0="time"
+  z_cal_gpm!1="lev"
+  z_cal_gpm!2="lat"
+  z_cal_gpm!3="lon"
+  z_cal_gpm&time=time
+  z_cal_gpm&lev=level
+  z_cal_gpm&lat=lat
+  z_cal_gpm&lon=lon
+  z_cal_gpm&lat@units="degrees_north"
+  z_cal_gpm&lon@units="degrees_east"
+
+  t         = fin->t          ; "Temperature" 
+    t_scale_factor = 0.00171327564020107 
+    t_add_offset = 257.537153005735 
+  t_cal        = ( t * t_scale_factor) + t_add_offset
+  t_cal@units="mm"
+  t_cal!0="time"
+  t_cal!1="lev"
+  t_cal!2="lat"
+  t_cal!3="lon"
+  t_cal&time=time
+  t_cal&lev=level
+  t_cal&lat=lat
+  t_cal&lon=lon
+  t_cal&lat@units="degrees_north"
+  t_cal&lon@units="degrees_east"
+
+  q         = fin->q          ; "Specific humidity" 
+    q_scale_factor = 4.12289509578853e-07 ;
+    q_add_offset = 0.0134840970453707 ;
+  q_cal        = ( q * q_scale_factor) + q_add_offset
+  q_cal@units="mm"
+  q_cal!0="time"
+  q_cal!1="lev"
+  q_cal!2="lat"
+  q_cal!3="lon"
+  q_cal&time=time
+  q_cal&lev=level
+  q_cal&lat=lat
+  q_cal&lon=lon
+  q_cal&lat@units="degrees_north"
+  q_cal&lon@units="degrees_east"
+
+  r         = fin->r          ; "Relative humidity"  
+    r_scale_factor = 0.00396517658907427 ;
+    r_add_offset = 102.794008832451 ;
+  r_cal        = ( r * r_scale_factor) + r_add_offset 
+  r_cal@units="mm"
+  r_cal!0="time"
+  r_cal!1="lev"
+  r_cal!2="lat"
+  r_cal!3="lon"
+  r_cal&time=time
+  r_cal&lev=level
+  r_cal&lat=lat
+  r_cal&lon=lon
+  r_cal&lat@units="degrees_north"
+  r_cal&lon@units="degrees_east"
+
+  u         = fin->u          ; "U component of wind" 
+    u_scale_factor = 0.00233286750978217 ;
+    u_add_offset = 22.3410347991553 ;
+  u_cal        = ( u * u_scale_factor) + u_add_offset
+  u_cal@units="mm"
+  u_cal!0="time"
+  u_cal!1="lev"
+  u_cal!2="lat"
+  u_cal!3="lon"
+  u_cal&time=time
+  u_cal&lev=level
+  u_cal&lat=lat
+  u_cal&lon=lon
+  u_cal&lat@units="degrees_north"
+  u_cal&lon@units="degrees_east"
+
+  v         = fin->v          ; "V component of wind" 
+    v_scale_factor = 0.00251601232871225 ;
+    v_add_offset = 4.29763115399189 ;
+  v_cal        = ( v * v_scale_factor) + v_add_offset
+  v_cal@units="mm"
+  v_cal!0="time"
+  v_cal!1="lev"
+  v_cal!2="lat"
+  v_cal!3="lon"
+  v_cal&time=time
+  v_cal&lev=level
+  v_cal&lat=lat
+  v_cal&lon=lon
+  v_cal&lat@units="degrees_north"
+  v_cal&lon@units="degrees_east"
+
+; 2017-07-12_06: 1030230 
+; 2017-07-12_12: 1030236
+
+; ---------------------
+    wks = gsn_open_wks("pdf","ec_20170713_12_00")
+    plot = new(2,graphic)                    ; create graphics array
+    gsn_define_colormap(wks,"gui_default")
+
+;---Set common resources for all plots
+    res                = True
+    res@gsnFrame       = False
+    res@gsnDraw        = False
+    res@gsnLeftString  = ""
+    res@gsnRightString = ""
+
+;---Necessary for contours to be overlaid correctly on WRF projection
+;  Only for WRF Map and contours
+;    res@tfDoNDCOverlay = True
+
+;---Temperature filled contour plot
+    t_res                      = res
+    t_res@cnFillOn             = True
+    t_res@cnLevelSelectionMode = "ExplicitLevels"
+    t_res@cnLevels             = ispan(280,320,4)
+    t_res@lbLabelFontHeightF   = 0.015
+    t_res@lbOrientation        = "Vertical"
+    t_res@pmLabelBarOrthogonalPosF = -0.005
+    contour_t = gsn_csm_contour(wks,t_cal(itime,4,:,:),t_res)
+ 
+;---hgt line contour plot
+    levels      = ispan(5000,6000,20)
+    info_string = "HGT contours from 5000 to 6000 by 20"
+
+    hgt_res                                = res
+    hgt_res@cnLineColor                    = "NavyBlue"
+    hgt_res@cnLevelSelectionMode           = "ExplicitLevels"
+    hgt_res@cnLevels                       = levels
+    hgt_res@cnLineLabelBackgroundColor     = -1    ; transparent
+    hgt_res@cnLineThicknessF               = 1.0
+    hgt_res@cnHighLabelsOn                 = True
+    hgt_res@cnLowLabelsOn                  = True
+    hgt_res@cnHighLabelBackgroundColor     = -1
+    hgt_res@cnLowLabelBackgroundColor      = -1
+    hgt_res@cnInfoLabelString              = info_string
+    hgt_res@cnInfoLabelFontColor           = "NavyBlue"
+    hgt_res@cnInfoLabelPerimOn             = False
+
+    contour_psl = gsn_csm_contour(wks,z_cal_gpm(itime,2,:,:),hgt_res)
+
+;---Wind vector plot
+    vec_res                   = res
+;    vec_res@vcMinDistanceF   = 0.02
+;    vec_res@vcRefLengthF     = 0.02
+;    vec_res@vcMinFracLengthF = 0.2 
+;    vec_res@vcGlyphStyle     = "WindBarb"
+;    vec_res@vcRefAnnoOn      = False
+
+    vec_res@vcRefMagnitudeF   = 3.0                  ; define vector ref mag
+    vec_res@vcRefLengthF      = 0.01                 ; define length of vec ref
+    vec_res@vcGlyphStyle      = "LineArrow"   
+    vec_res@vcMinDistanceF    = 0.02                 ; thin out vectors
+    vec_res@vcMapDirection    = True
+    vec_res@vcLineArrowColor         = "peachpuff4"           ; change vector color 
+    vec_res@vcLineArrowThicknessF    = 1.2              ; change vector thickness
+    vec_res@vcRefAnnoArrowLineColor  = "black"          ; change ref vector color
+    vec_res@vcRefAnnoArrowUseVecColor= False            ; don't use vec color for ref
+
+    vector = gsn_csm_vector(wks,u_cal(itime,4,:,:),v_cal(itime,4,:,:),vec_res)
+
+;;set contour;;
+        r_res                             = res
+;        cnres@cnFillDrawOrder             = "PreDraw"
+        r_res@cnFillOn                    = True
+        r_res@cnLinesOn                   = False
+        r_res@pmLabelBarWidthF            = 0.4
+        r_res@pmLabelBarHeightF           = 0.05
+        r_res@pmLabelBarOrthogonalPosF    = 0.1
+        r_res@lbLabelFontHeightF          = 0.01
+        r_res@lbLabelAngleF               = 0
+        r_res@cnSmoothingOn = True
+        r_res@cnSmoothingTensionF = 2.8
+        cmap = read_colormap_file("BkBlAqGrYeOrReViWh200")
+        r_res@cnLevelSelectionMode        = "ExplicitLevels"
+        r_res@cnLevels                    = ispan(0,100,10)
+        r_res@cnFillPalette               = cmap(25:120,:)
+;        r_res@gsnLeftString               = "RH"
+
+        contour_rh = gsn_csm_contour(wks,r_cal(itime,4,:,:),r_res)
+
+;---Map plot 
+    mpres                        = True
+    mpres                        = res
+;    mpres@gsnAddCyclic          = False
+;    mpres@mpGeophysicalLineColor = "black"
+;    mpres@mpNationalLineColor    = "black"
+;    mpres@mpUSStateLineColor     = "black"
+;    mpres@mpGridAndLimbOn        = True               ; turn on grid lines
+;    mpres@mpGridLineDashPattern  = 2
+;    mpres@mpLandFillColor        = "white"
+;    mpres@mpOutlineDrawOrder     = "PostDraw"
+;    mpres@pmTickMarkDisplayMode  = "Always"     ; turn on tickmarks
+;    mpres@tmXTMajorLengthF       = 0
+;    mpres@tmYLMajorLengthF       = 0
+;    mpres@tmXBMajorLengthF       = 0
+;    mpres@tmYRMajorLengthF       = 0
+    mpres@mpDataSetName          = "Earth..4"   ; This new database contains
+    mpres@mpDataBaseVersion      = "MediumRes"  ; Medium resolution database
+    mpres@mpOutlineOn            = True         ; Turn on map outlines
+    mpres@mpOutlineSpecifiers    = (/"China:states","Taiwan"/)       ;China:states
+;       mpres@mpProjection           = "LambertConformal"
+;       mpres@mpLambertParallel1F     = 30.0      ; two parallels
+;       mpres@mpLambertParallel2F     = 60.0
+;       mpres@mpLambertMeridianF      = 116.0          ; central meridian
+;set area;;
+;    mpres@mpLimitMode             = "Corners"
+;    mpres@mpLeftCornerLatF        = 20.0
+;    mpres@mpLeftCornerLonF        = 80.0
+;    mpres@mpRightCornerLatF       = 60.0
+;    mpres@mpRightCornerLonF       = 160.0
+;    mpres@pmTickMarkDisplayMode  = "Always"     ; turn on tickmarks
+;    mpres@tmXTMajorLengthF        = 0
+;    mpres@tmYLMajorLengthF        = 0
+;    mpres@tmXBMajorLengthF        = 0
+;    mpres@tmYRMajorLengthF        = 0
+;---Set map resources based on projection on WRF output file
+    mpres = setmpres("  "," ","  ")
+;    map_res = wrf_map_resources(b,mpres)
+    map = gsn_csm_map(wks,mpres)
+
+;    overlay(map,contour_t)
+    overlay(map,contour_rh)
+    overlay(map,contour_psl)
+    overlay(map,vector)
+
+    draw(map)   ; This will draw all overlaid plots and the map
+    frame(wks)
+
+
+end 
